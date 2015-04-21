@@ -103,7 +103,7 @@
 #  define WHITE        "\033[1;37m"
 #endif
 
-#define PRINT_PAGE_SIZE			20		/*列出目录或列出比较结果时，分页大小*/
+#define PRINT_PAGE_SIZE			50		/*列出目录或列出比较结果时，分页大小*/
 
 #define OP_NONE					0
 #define OP_EQ					1		/*文件相同*/
@@ -1574,14 +1574,13 @@ static void print_filelist(PcsFileInfoList *list, int *pFileCount, int *pDirCoun
 
 	if (size_width < 4)
 		size_width = 4;
-	print_filelist_head(size_width);
-	puts("------------------------------------------------------------------------------");
+	//print_filelist_head(size_width);
 	pcs_filist_iterater_init(list, &iterater, PcsFalse);
 	while (pcs_filist_iterater_next(&iterater)) {
 		file = iterater.current;
 		print_filelist_row(file, size_width);
 	}
-	puts("------------------------------------------------------------------------------");
+	
 	pcs_utils_readable_size((double)total, tmp, 63, NULL);
 	tmp[63] = '\0';
 	printf("Total: %s, File Count: %d, Directory Count: %d\n", tmp, cnt_file, cnt_dir);
@@ -3011,8 +3010,6 @@ static int rb_print_meta(void *a, void *state)
 
 	if (s->printed_count == 0) {
 		if (s->page_enable && s->page_size > 0)
-			printf("\n%sPAGE #%d\n", s->prefixion ? s->prefixion : "", s->page_index);
-		else
 			putchar('\n');
 		print_meta_list_head(s->first, s->second, s->other);
 	}
@@ -3024,13 +3021,10 @@ static int rb_print_meta(void *a, void *state)
 			   "  YES - Continue, but print all left items\n"
 			   "Press <enter> to continue or input your choice: ", s->page_index);
 		std_string(tmp, 8);
-		if (strlen(tmp) != 0 && pcs_utils_strcmpi(tmp, "y") && pcs_utils_strcmpi(tmp, "yes")) {
+		if ('y' == *tmp) 
 			return -1;
-		}
-		if (strlen(tmp) != 0 && (strcmp(tmp, "Y") == 0 || strcmp(tmp, "YES") == 0)) {
+		if ( 'Y' == *tmp )
 			s->page_enable = 0;
-		}
-		printf("\n%sPAGE #%d\n", s->prefixion ? s->prefixion : "", s->page_index);
 		print_meta_list_head(s->first, s->second, s->other);
 	}
 
@@ -4743,7 +4737,7 @@ static int on_compared_dir(ShellContext *context, compare_arg *arg, rb_red_blk_t
 	state.context = context;
 	state.page_size = context->list_page_size;
 	state.page_index = 1;
-	state.page_enable = 1;
+	state.page_enable = 0;
 	state.dry_run = arg->dry_run;
 	state.local_basedir = arg->local_file;
 	state.remote_basedir = arg->remote_file;
@@ -5430,7 +5424,7 @@ static int cmd_list(ShellContext *context, struct args *arg)
 			}
 			break;
 		}
-		printf("PAGE#%d\n", page_index);
+	       
 		print_filelist(list, &fileCount, &dirCount, &totalSize);
 		if (list->count < context->list_page_size) {
 			pcs_filist_destroy(list);
@@ -5439,14 +5433,11 @@ static int cmd_list(ShellContext *context, struct args *arg)
 		pcs_filist_destroy(list);
 		printf("Print next page#%d [Y|N]? ", page_index + 1);
 		std_string(tmp, 10);
-		//printf("[%s] %d\n", tmp, strlen(tmp));
-		if (strlen(tmp) != 0 && pcs_utils_strcmpi(tmp, "y") && pcs_utils_strcmpi(tmp, "yes")) {
-			break;
-		}
+                if ('y' != *tmp)
+                  break;
 		page_index++;
 	}
 	if (page_index > 1) {
-		puts("\n------------------------------------------------------------------------------");
 		pcs_utils_readable_size((double)totalSize, tmp, 63, NULL);
 		tmp[63] = '\0';
 		printf("Total Page: %d, Total Size: %s, File Count: %d, Directory Count: %d\n", page_index, tmp, fileCount, dirCount);
