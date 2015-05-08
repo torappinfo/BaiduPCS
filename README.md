@@ -20,7 +20,6 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     make install #将安装到/usr/local/bin下
 ### 4. 手动安装到其他目录，例如 /usr/bin 下 
     cp ./bin/pcs /usr/bin/
-    chmod a+x /usr/bin/pcs (此行命令非必须执行)
 
 编译 (Windows)：
 ===================================
@@ -133,7 +132,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     {
 	    "cookiefile":	        "/home/gang/.pcs/default.cookie", /*指定Cookie文件*/
 	    "captchafile":	        "/home/gang/.pcs/captcha.gif",    /*指定验证码图片保存路径*/
-	    "workdir":	            "/",                              /*指定当期工作目录*/
+	    "workdir":	            "/",                              /*指定当前的网盘工作目录*/
 	    "list_page_size":	    20,                               /*指定列出目录时分页大小*/
 	    "list_sort_name":	    "name",                           /*指定列出目录时排序字段*/
 	    "list_sort_direction":	"asc",                            /*指定列出目录时的排序方向*/
@@ -158,7 +157,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     pcs download [-f] <remote file> <local file>
 	pcs d [-f] <remote file> <local file>
     
-    只能下载文件，如果需要下载目录，请使用 'pcs synch -d <remote dir> <local dir>'。
+    只能下载文件，如果需要下载目录，请使用 'pcs synch -d <local dir> <remote dir>'。
     
     选项：
       -f   如果本地文件存在的话，强制替换
@@ -221,7 +220,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     
     登录可能需要输入验证码。目前的处理办法是把验证码图片写入到本地文件，用户打开文件识别验证码。
     可通过 'pcs set --captcha_file=<path> 来指定验证码保存路径，
-    例如：'pcs set --captcha_file=/var/www/xxx.com/captch.git'将文件保存到网站目录下。
+    例如：'pcs set --captcha_file=/var/www/xxx.com/captch.gif'将文件保存到网站目录下。
     可通过 'pcs context' 查看当前的执行上下文。执行上下文包括验证码图片保存路径等其他信息。
     
     示例：
