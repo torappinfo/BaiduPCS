@@ -203,7 +203,7 @@ PCS_API PcsBool pcs_utils_streq(const char *str1, const char *str2, int len)
 /**
 * 字符串md5
 */
-PCS_API const char *md5_string(const char *str)
+PCS_API const char *pcs_md5_string(const char *str)
 {
 	static char tmp[33] = { '\0' };
 	unsigned char md[16];
@@ -218,11 +218,30 @@ PCS_API const char *md5_string(const char *str)
 /**
 * 字符串md5。返回16字节的MD5值
 */
-PCS_API const unsigned char *md5_string_raw(const char *str)
+PCS_API const unsigned char *pcs_md5_string_raw(const char *str)
 {
 	static unsigned char md[16];
 	MD5((const unsigned char*)str, strlen(str), md);
 	return md;
+}
+
+PCS_API const unsigned char *pcs_md5_bytes_raw(const unsigned char* bytes, int len)
+{
+	static unsigned char md[16];
+	MD5(bytes, len, md);
+	return md;
+}
+
+PCS_API const char *pcs_md5_bytes(const unsigned char* bytes, int len)
+{
+	static char tmp[33] = { '\0' };
+	unsigned char md[16];
+	int i;
+	MD5(bytes, len, md);
+	for (i = 0; i<16; i++){
+		sprintf(&tmp[i * 2], "%02x", md[i]);
+	}
+	return tmp;
 }
 
 
@@ -245,7 +264,7 @@ PCS_API const unsigned char *md5_string_raw(const char *str)
 /**
 * 文件 md5
 */
-PCS_API const char *md5_file(const char *file_name)
+PCS_API const char *pcs_md5_file_s(const char *file_name)
 {
 	static char tmp[33] = { '\0' };
 	MD5_CTX md5;
@@ -272,7 +291,7 @@ PCS_API const char *md5_file(const char *file_name)
 /*把32位整数按从高位到低位顺序填充到buf的4个字节中。
 * 例：0xF1E2D3C4 填充后 buf[0] = 0xF1, buf[1] = 0xE2, buf[2] = 0xD3, buf[3] = 0xC4.buf中其他项无改动
 */
-PCS_API void int2Buffer(int v, char *buf)
+void int2Buffer(int v, char *buf)
 {
 	buf[0] = (unsigned char)((((unsigned int)v) >> 24) & 0xFF);
 	buf[1] = (unsigned char)((((unsigned int)v) >> 16) & 0xFF);
@@ -281,7 +300,7 @@ PCS_API void int2Buffer(int v, char *buf)
 }
 
 /*int2Buffer的逆过程*/
-PCS_API int readInt(const char *buf)
+int readInt(const char *buf)
 {
 	unsigned int rc = 0;
 	rc = (unsigned int)(((unsigned char)buf[0]));
@@ -294,7 +313,7 @@ PCS_API int readInt(const char *buf)
 /*
  * 提取出字符 callback({...}) 中的 {...} 部分 
  */
-PCS_API char *extract_json_from_callback(char *callback)
+char *extract_json_from_callback(char *callback)
 {
 	char *start, *p;
 	start = callback;
@@ -312,4 +331,35 @@ PCS_API char *extract_json_from_callback(char *callback)
 		return start;
 	}
 	return NULL;
+}
+
+/* For C# invoke */
+PCS_API int pcs_strlen(const char *s)
+{
+	return strlen(s);
+}
+
+/*时间转换*/
+PCS_API const char *pcs_time2str(time_t time)
+{
+	struct tm *tm = NULL;
+	time_t t = time;
+	static char tmp[64];
+
+	if (time)
+		tm = localtime(&t);
+
+	if (tm) {
+		sprintf(tmp, "%d-%02d-%02d %02d:%02d:%02d",
+			1900 + tm->tm_year,
+			tm->tm_mon + 1,
+			tm->tm_mday,
+			tm->tm_hour,
+			tm->tm_min,
+			tm->tm_sec);
+		return tmp;
+	}
+	else {
+		return "";
+	}
 }

@@ -9,7 +9,7 @@
 #include "pcs_slist.h"
 #include "pcs_utils.h"
 
-#define PCS_API_VERSION "v1.1"
+#define PCS_API_VERSION "v1.1.1"
 
 #define PCS_RAPIDUPLOAD_THRESHOLD (256 * 1024)
 
@@ -92,6 +92,15 @@ typedef void *Pcs;
 
 /*输出PCS API的版本号*/
 PCS_API const char *pcs_version();
+
+/* 清除错误消息 */
+PCS_API void pcs_clear_errmsg(Pcs handle);
+
+/* 设置错误消息 */
+PCS_API void pcs_set_serrmsg(Pcs handle, const char *errmsg);
+
+/* 添加文本到错误消息的结尾 */
+PCS_API void pcs_cat_serrmsg(Pcs handle, const char *errmsg);
 
 /*
  * 创建Pcs。
@@ -292,8 +301,11 @@ PCS_API const char *pcs_cat(Pcs handle, const char *path, size_t *dstsz);
  * 必须指定写入下载内容的函数，可通过PCS_OPTION_DOWNLOAD_WRITE_FUNCTION选项来指定
  * 成功后返回PCS_OK，失败则返回错误编号
  */
-PCS_API PcsRes pcs_download(Pcs handle, const char *path, curl_off_t max_speed, curl_off_t resume_from);
+PCS_API PcsRes pcs_download(Pcs handle, const char *path, curl_off_t max_speed, curl_off_t resume_from, curl_off_t max_length);
 
+/*
+ * 获取待下载文件的字节大小
+ */
 PCS_API int64_t pcs_get_download_filesize(Pcs handle, const char *path);
 
 /*
@@ -349,6 +361,22 @@ PCS_API PcsFileInfo *pcs_create_superfile(Pcs handle, const char *path, PcsBool 
  */
 PCS_API PcsFileInfo *pcs_upload(Pcs handle, const char *path, PcsBool overwrite, 
 									   const char *local_filename);
+/*
+* 上传文件到网盘
+*   to_path		  目标文件，地址需写全，如/temp/file.txt
+*   overwrite     指定是否覆盖原文件，传入PcsTrue则覆盖，传入PcsFalse，则会使用当前日期重命名。
+*                 例，如果文件file.txt以存在，则上传后新的文件自动变更为file20140117.txt
+*   read_func     读取文件的方法
+*   userdata	  程序本身不使用该参数，仅原样传递到 read_func 函数中
+*   content_size  待上传文件的大小
+* 成功后，返回PcsFileInfo类型实例，该实例包含网盘中新文件的路径等信息
+* 使用完成后需调用 pcs_fileinfo_destroy() 方法释放。
+* 失败则返回 NULL。
+*/
+PCS_API PcsFileInfo *pcs_upload_s(Pcs handle, const char *to_path, PcsBool overwrite,
+	size_t(*read_func)(void *ptr, size_t size, size_t nmemb, void *userdata),
+	void *userdata,
+	size_t content_size);
 
 /*获取本地文件的大小*/
 PCS_API int64_t pcs_local_filesize(Pcs handle, const char *path);
@@ -359,6 +387,17 @@ PCS_API int64_t pcs_local_filesize(Pcs handle, const char *path);
  *   md5        用于接收文件的md5值，长度必须大于等于32
  */
 PCS_API PcsBool pcs_md5_file(Pcs handle, const char *path, char *md5);
+
+/*
+* 计算文件的MD5值
+*   read_func  读取文件的方法
+*   userdata   原样传入 read_func
+*   md5        用于接收文件的md5值，长度必须大于等于32
+*/
+PCS_API PcsBool pcs_md5_s(Pcs handle,
+	size_t(*read_func)(void *ptr, size_t size, size_t nmemb, void *userdata),
+	void *userdata,
+	char *md5_buf);
 
 /*
 * 计算文件的MD5值，仅从文件offset偏移处开始计算，并仅计算 length 长度的数据。
@@ -379,6 +418,8 @@ PCS_API PcsBool pcs_md5_file_slice(Pcs handle, const char *path, int64_t offset,
  */
 PCS_API PcsFileInfo *pcs_rapid_upload(Pcs handle, const char *path, PcsBool overwrite,
 	const char *local_filename, char *content_md5, char *slice_md5);
+PCS_API PcsFileInfo *pcs_rapid_upload_r(Pcs handle, const char *path, PcsBool overwrite,
+	int64_t content_length, const char *content_md5, const char *slice_md5);
 
 /*
  * 获取Cookie 数据。
@@ -395,6 +436,7 @@ PCS_API char *pcs_cookie_data(Pcs handle);
 */
 PCS_API const char *pcs_req_rawdata(Pcs handle, int *size, const char **encode);
 
+/*获取下载速度*/
 PCS_API double pcs_speed_download(Pcs handle);
 
 #endif

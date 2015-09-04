@@ -10,7 +10,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
 程序依赖于 libcurl。
 
 ### 1. 安装依赖
-    apt-get install build-essential libcurl4-openssl-dev
+    apt-get install build-essential libcurl4-openssl-dev libssl-dev
 ### 2. 获取源代码
     git clone https://github.com/GangZhuo/BaiduPCS.git
 ### 3. 编译源代码
@@ -31,7 +31,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     使用 Microsoft Visual Studio Community 2013 打开源码根目录下的 baidupcs.sln，并执行编译操作，
 	将在 Debug 或 Release 目录下产生 pcs.exe 文件。
 
-#### 下载 [适用Windows的预编译版本]
+#### 下载 [适用Windows的预编译版本] 或 下载 .net4.0 带窗体版本 [BaiduCloudDisk for .Net 4.0] 
 
 编译 (Openwrt)：
 ===================================
@@ -389,6 +389,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
 * 3. 上传大文件后，通过 'pcs meta'获取到的md5值与本地文件计算出的md5不匹配，这个应是百度网盘的bug。（测试时，把上传的文件下载到本地后，对比md5匹配）
 
 [baidupcs-dependencies.zip]: https://sourceforge.net/projects/baidupcs/files/Dependencies/
-[适用Windows的预编译版本]:   https://sourceforge.net/projects/baidupcs/files/Windows/
+[适用Windows的预编译版本]:   https://github.com/GangZhuo/BaiduPCS/releases
+[BaiduCloudDisk for .Net 4.0]: https://github.com/GangZhuo/BaiduPCS_NET/releases
 [Openwrt SDK]:               http://wiki.openwrt.org/doc/howto/obtain.firmware.sdk
 [预编译 ipk for Openwrt]:    http://sourceforge.net/projects/baidupcs/files/Openwrt/

@@ -386,6 +386,33 @@ int u8_tombs_size(const char *src, int srcsz)
 	err = WideCharToMultiByte(GetConsoleCP(), WC_COMPOSITECHECK, unicode, unicode_size, NULL, 0, NULL, NULL);
 	return err;
 }
+
+char *mbs2utf8(const char *s)
+{
+	int sl = strlen(s);
+	int sz = u8_mbs_toutf8_size(s, sl);
+	char *res = 0;
+	res = (char *)pcs_malloc(sz + 1);
+	if (!res)
+		return 0;
+	memset(res, 0, sz + 1);
+	u8_mbs_toutf8(res, sz, s, sl);
+	return res;
+}
+
+char *utf82mbs(const char *s)
+{
+	int sl = strlen(s);
+	int sz = u8_tombs_size(s, sl);
+	char *res = 0;
+	res = (char *)pcs_malloc(sz + 1);
+	if (!res)
+		return 0;
+	memset(res, 0, sz + 1);
+	u8_tombs(res, sz, s, sl);
+	return res;
+}
+
 # define printf u8_printf
 
 # define sleep(s) Sleep((s) * 1000)
@@ -403,6 +430,23 @@ int truncate(const char *file, int64_t size)
 		return 0;
 	}
 	return -1;
+}
+
+#else
+/*判断当前操作系统编码是否是UTF-8编码*/
+int u8_is_utf8_sys()
+{
+	return 1;
+}
+
+char *mbs2utf8(const char *s)
+{
+	return pcs_utils_strdup(s);
+}
+
+char *utf82mbs(const char *s)
+{
+	return pcs_utils_strdup(s);
 }
 
 #endif
@@ -482,7 +526,7 @@ static int encrypt_file(const char *src, const char *dst, int secure_method, con
 	unsigned char		key[AES_BLOCK_SIZE] = { 0 };
 	unsigned char		iv[AES_BLOCK_SIZE] = { 0 };
 	int rc;
-	rc = AES_set_encrypt_key(md5_string_raw(secure_key), secure_method, &aes);
+	rc = AES_set_encrypt_key(pcs_md5_string_raw(secure_key), secure_method, &aes);
 	if (rc < 0) {
 		fprintf(stderr, "Error: Can't set encrypt key.\n");
 		return -1;
@@ -652,7 +696,7 @@ static int decrypt_file(const char *src, const char *dst, const char *secure_key
 		return -1;
 	}
 
-	rc = AES_set_decrypt_key(md5_string_raw(secure_key), head.bits, &aes);
+	rc = AES_set_decrypt_key(pcs_md5_string_raw(secure_key), head.bits, &aes);
 	if (rc < 0) {
 		if (pErrMsg) {
 			if (*pErrMsg) pcs_free(*pErrMsg);
@@ -791,7 +835,7 @@ static int encrypt_data(const char *src, size_t src_size, char **dst, size_t *ds
 	const char *pin;
 	char *pout, buf[32];
 
-	rc = AES_set_encrypt_key(md5_string_raw(secure_key), secure_method, &aes);
+	rc = AES_set_encrypt_key(pcs_md5_string_raw(secure_key), secure_method, &aes);
 	if (rc < 0) {
 		fprintf(stderr, "Error: Can't set encrypt key.\n");
 		return -1;
@@ -866,7 +910,7 @@ static int decrypt_data(const char *src, size_t src_size, char **dst, size_t *ds
 		return -1;
 	}
 
-	rc = AES_set_decrypt_key(md5_string_raw(secure_key), head.bits, &aes);
+	rc = AES_set_decrypt_key(pcs_md5_string_raw(secure_key), head.bits, &aes);
 	if (rc < 0) {
 		return -1;
 	}
@@ -1744,13 +1788,13 @@ static int restore_context(ShellContext *context, const char *filename)
 	}
 	filesize = read_file(context->contextfile, &filecontent);
 	if (filesize <= 0) {
-		fprintf(stderr, "Error: Can't read the context file (%s).\n", context->contextfile, app_name);
+		fprintf(stderr, "Error: Can't read the context file (%s).\n", context->contextfile);
 		if (filecontent) pcs_free(filecontent);
 		return -1;
 	}
 	root = cJSON_Parse(filecontent);
 	if (!root) {
-		fprintf(stderr, "Error: Broken context file (%s).\n", context->contextfile, app_name);
+		fprintf(stderr, "Error: Broken context file (%s).\n", context->contextfile);
 		pcs_free(filecontent);
 		return -1;
 	}
@@ -1936,7 +1980,7 @@ static void destroy_pcs(Pcs *pcs)
 /*打印版本*/
 static void version()
 {
-	printf(program_full_name "\n", app_name);
+	printf(program_full_name "%s\n", app_name);
 }
 
 /*打印cat命令用法*/
@@ -2318,8 +2362,8 @@ static void usage_synch()
 		   "  '-d' to download newer files only, and use '-c' to view confuse files.\n"
 		   "  Notes:\n"
 		   "    The confuse items will do nothing, \n"
-		   "    e.g. A side of the target is file and another is directory.\n",
-		   app_name);
+		   "    e.g. A side of the target is file and another is directory.\n"
+		   );
 	printf("\nOptions:\n");
 	printf("  -c    Print the files that confuse, which is don't know how to do.\n");
 	printf("  -d    Synch the new files from the net disk. \n"
@@ -2634,7 +2678,7 @@ static int rb_compare(const void *a, const void *b, void *state)
 /*红黑树中用于打印 key */
 static void rb_print_key(const void *a, void *state)
 {
-	printf("%s", a);
+	printf("%s", (char *)a);
 }
 
 /*红黑树中用于打印 info */
@@ -3213,7 +3257,7 @@ static void *download_thread(void *params)
 			PCS_OPTION_DOWNLOAD_WRITE_FUNCTION, &download_write_for_multy_thread,
 			PCS_OPTION_DOWNLOAD_WRITE_FUNCTION_DATA, ts,
 			PCS_OPTION_END);
-		res = pcs_download(pcs, ds->remote_file, convert_to_real_speed(context->max_speed_per_thread), ts->start);
+		res = pcs_download(pcs, ds->remote_file, convert_to_real_speed(context->max_speed_per_thread), ts->start, ts->end - ts->start);
 		if (res != PCS_OK && ts->status != DOWNLOAD_STATUS_OK) {
 			lock_for_download(ds);
 			if (!ds->pErrMsg) {
@@ -3455,7 +3499,7 @@ static inline int do_download(ShellContext *context,
 	fsize = pcs_get_download_filesize(context->pcs, remote_path);
 	ds.file_size = fsize;
 
-	if (fsize <= 0) {
+	if (fsize <= MIN_SLICE_SIZE) {
 		/*启动下载*/
 		/*打开文件*/
 		ds.pf = fopen(tmp_local_path, "wb");
@@ -3476,7 +3520,7 @@ static inline int do_download(ShellContext *context,
 			PCS_OPTION_DOWNLOAD_WRITE_FUNCTION, &download_write,
 			PCS_OPTION_DOWNLOAD_WRITE_FUNCTION_DATA, &ds,
 			PCS_OPTION_END);
-		res = pcs_download(context->pcs, remote_path, convert_to_real_speed(context->max_speed_per_thread), 0);
+		res = pcs_download(context->pcs, remote_path, convert_to_real_speed(context->max_speed_per_thread), 0, 0);
 		fclose(ds.pf);
 		if (res != PCS_OK) {
 			if (pErrMsg) {
@@ -4539,7 +4583,7 @@ struct compare_arg
 	int			print_confuse;	/*是否打印无法确定是下载还是上传的文件*/
 	int			dry_run;		/*用于演示，不执行任何上传和下载操作*/
 
-	const char	*local_file;	/*本地路径*/
+	char	*local_file;	/*本地路径*/
 	const char	*remote_file;	/*远端路径*/
 
 	int			check_local_dir_exist;
@@ -4561,7 +4605,7 @@ static int parse_compare_args(struct args *g, compare_arg *cmpArg)
 	cmpArg->recursive = has_opt(g, "r");
 	cmpArg->print_right = has_opt(g, "u");
 
-	cmpArg->local_file = g->argv[0];
+	cmpArg->local_file = u8_is_utf8_sys() ? g->argv[0] : utf82mbs(g->argv[0]);
 	cmpArg->remote_file = g->argv[1];
 	
 	return 0;
@@ -4933,7 +4977,11 @@ static int cmd_compare(ShellContext *context, struct args *arg)
 	}
 	cmpArg.check_local_dir_exist = 1;
 
-	return compare(context, &cmpArg, &on_compared_file, NULL, &on_compared_dir, NULL);
+	int rc = compare(context, &cmpArg, &on_compared_file, NULL, &on_compared_dir, NULL);
+	if (!u8_is_utf8_sys()) {
+		pcs_free(cmpArg.local_file);
+	}
+	return rc;
 }
 
 #pragma endregion
@@ -4962,7 +5010,7 @@ static int cmd_download(ShellContext *context, struct args *arg)
 {
 	int is_force = 0;
 	char *path = NULL, *errmsg = NULL;
-	const char *relPath = NULL, *locPath = NULL;
+	char *relPath = NULL, *locPath = NULL;
 
 	LocalFileInfo *local;
 	PcsFileInfo *meta;
@@ -4978,19 +5026,21 @@ static int cmd_download(ShellContext *context, struct args *arg)
 
 	is_force = has_opt(arg, "f");
 	relPath = arg->argv[0];
-	locPath = arg->argv[1];
+	locPath = u8_is_utf8_sys() ? arg->argv[1] : utf82mbs(arg->argv[1]);
 
 	/*检查本地文件 - 开始*/
 	local = GetLocalFileInfo(locPath);
 	if (local && local->isdir) {
 		fprintf(stderr, "Error: The local file exist, but it's a directory.\n");
 		DestroyLocalFileInfo(local);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	else if (local && !local->isdir) {
 		if (!is_force) {
-			fprintf(stderr, "Error: The local file exist. You can specify '-f' to force override.\n", locPath);
+			fprintf(stderr, "Error: The local file: %s exist. You can specify '-f' to force override.\n", arg->argv[1]);
 			DestroyLocalFileInfo(local);
+			if (!u8_is_utf8_sys()) pcs_free(locPath);
 			return -1;
 		}
 	}
@@ -4999,6 +5049,7 @@ static int cmd_download(ShellContext *context, struct args *arg)
 
 	//检查是否已经登录
 	if (!is_login(context, NULL)) {
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 
@@ -5006,6 +5057,7 @@ static int cmd_download(ShellContext *context, struct args *arg)
 	if (strcmp(path, "/") == 0) {
 		fprintf(stderr, "Error: Can't download root directory. \nYou can use 'synch -cd' command to download the directory.\n");
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 
@@ -5014,12 +5066,14 @@ static int cmd_download(ShellContext *context, struct args *arg)
 	if (!meta) {
 		fprintf(stderr, "Error: The remote file not exist, or have error: %s\n", pcs_strerror(context->pcs));
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	if (meta->isdir) {
 		fprintf(stderr, "Error: The remote file is directory. \nYou can use 'synch -cd' command to download the directory.\n");
 		pcs_fileinfo_destroy(meta);
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	/*检查网盘文件 - 结束*/
@@ -5034,12 +5088,14 @@ static int cmd_download(ShellContext *context, struct args *arg)
 		pcs_fileinfo_destroy(meta);
 		if (errmsg) pcs_free(errmsg);
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
-	printf("Download %s to %s Success.\n", meta->path, locPath);
+	printf("Download %s to %s Success.\n", meta->path, arg->argv[1]);
 	pcs_fileinfo_destroy(meta);
 	if (errmsg) pcs_free(errmsg);
 	pcs_free(path);
+	if (!u8_is_utf8_sys()) pcs_free(locPath);
 	return 0;
 }
 
@@ -5153,7 +5209,7 @@ static int cmd_echo(ShellContext *context, struct args *arg)
 
 	f = pcs_upload_buffer(context->pcs, path, PcsTrue, buf, sz);
 	if (!f) {
-		fprintf(stderr, "Error: %s. \n", pcs_strerror(context->pcs), path);
+		fprintf(stderr, "Error: %s. path = %s\n", pcs_strerror(context->pcs), path);
 		pcs_free(path);
 		if (need_free) pcs_free(buf);
 		return -1;
@@ -5168,6 +5224,7 @@ static int cmd_echo(ShellContext *context, struct args *arg)
 static int cmd_encode(ShellContext *context, struct args *arg)
 {
 	int encrypt = 0, decrypt = 0, force = 0, secure_method;
+	char *src = NULL, *dst = NULL;
 	LocalFileInfo *dstInfo;
 	if (test_arg(arg, 2, 2, "d", "e", "f", "h", "help", NULL)) {
 		usage_encode();
@@ -5193,16 +5250,32 @@ static int cmd_encode(ShellContext *context, struct args *arg)
 	if (!encrypt && !decrypt)
 		decrypt = 1;
 
-	dstInfo = GetLocalFileInfo(arg->argv[1]);
+	if (u8_is_utf8_sys()) {
+		src = arg->argv[0];
+		dst = arg->argv[1];
+	}
+	else {
+		src = utf82mbs(arg->argv[0]);
+		dst = utf82mbs(arg->argv[1]);
+	}
+	dstInfo = GetLocalFileInfo(dst);
 	if (dstInfo) {
 		if (dstInfo->isdir) {
 			fprintf(stderr, "Error: The dest is directory. %s", arg->argv[1]);
 			DestroyLocalFileInfo(dstInfo);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
 		else if (!force) {
 			fprintf(stderr, "Error: The dest is exist. You can use '-f' to force override. %s", arg->argv[1]);
 			DestroyLocalFileInfo(dstInfo);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
 		DestroyLocalFileInfo(dstInfo);
@@ -5213,14 +5286,26 @@ static int cmd_encode(ShellContext *context, struct args *arg)
 		secure_method = get_secure_method(context);
 		if (secure_method != PCS_SECURE_AES_CBC_128 && secure_method != PCS_SECURE_AES_CBC_192 && secure_method != PCS_SECURE_AES_CBC_256) {
 			fprintf(stderr, "Error: You have not set the encrypt method, the method should be one of [aes-cbc-128|aes-cbc-192|aes-cbc-256]. You can set it by '%s set'.\n", app_name);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
 		if (!context->secure_key || strlen(context->secure_key) == 0) {
 			fprintf(stderr, "Error: You have not set the encrypt key. You can set it by '%s set'.", app_name);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
-		if (encrypt_file(arg->argv[0], arg->argv[1], secure_method, context->secure_key, &msg)) {
+		if (encrypt_file(src, dst, secure_method, context->secure_key, &msg)) {
 			fprintf(stderr, "Error: %s\n", msg);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
 	}
@@ -5228,18 +5313,33 @@ static int cmd_encode(ShellContext *context, struct args *arg)
 		char *msg = NULL;
 		if (!context->secure_key || strlen(context->secure_key) == 0) {
 			fprintf(stderr, "Error: You have not set the encrypt key. You can set it by '%s set'.", app_name);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
-		if (decrypt_file(arg->argv[0], arg->argv[1], context->secure_key, &msg)) {
+		if (decrypt_file(src, dst, context->secure_key, &msg)) {
 			fprintf(stderr, "Error: %s\n", msg);
+			if (!u8_is_utf8_sys()) {
+				pcs_free(src);
+				pcs_free(dst);
+			}
 			return -1;
 		}
 	}
 	else {
 		usage_encode();
+		if (!u8_is_utf8_sys()) {
+			pcs_free(src);
+			pcs_free(dst);
+		}
 		return -1;
 	}
-
+	if (!u8_is_utf8_sys()) {
+		pcs_free(src);
+		pcs_free(dst);
+	}
 	return 0;
 }
 
@@ -6158,7 +6258,11 @@ static int cmd_synch(ShellContext *context, struct args *arg)
 	cmpArg.check_local_dir_exist = 0;
 	cmpArg.onRBEnumerateStatePrepared = &synchOnRBEnumStatePrepared;
 
-	return compare(context, &cmpArg, &synchFile, NULL, &on_compared_dir, NULL);
+	int rc = compare(context, &cmpArg, &synchFile, NULL, &on_compared_dir, NULL);
+	if (!u8_is_utf8_sys()) {
+		pcs_free(cmpArg.local_file);
+	}
+	return rc;
 }
 
 #pragma endregion
@@ -6169,7 +6273,7 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 	const char *opts[] = { "f", NULL };
 	int is_force = 0;
 	char *path = NULL, *errmsg = NULL;
-	const char *relPath = NULL, *locPath = NULL;
+	char *relPath = NULL, *locPath = NULL;
 
 	LocalFileInfo *local;
 	PcsFileInfo *meta;
@@ -6184,18 +6288,20 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 	}
 
 	is_force = has_opt(arg, "f");
-	locPath = arg->argv[0];
+	locPath = u8_is_utf8_sys() ? arg->argv[0] : utf82mbs(arg->argv[0]);
 	relPath = arg->argv[1];
 
 	/*检查本地文件 - 开始*/
 	local = GetLocalFileInfo(locPath);
 	if (!local) {
 		fprintf(stderr, "Error: The local file not exist.\n");
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	else if (local->isdir) {
-		fprintf(stderr, "Error: The local file is directory. \nYou can use 'synch -cu' command to upload the directory.\n", locPath);
+		fprintf(stderr, "Error: The local file is directory: %s. \nYou can use 'synch -cu' command to upload the directory.\n", arg->argv[0]);
 		DestroyLocalFileInfo(local);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	/*检查本地文件 - 结束*/
@@ -6203,6 +6309,7 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 	//检查是否已经登录
 	if (!is_login(context, NULL)) {
 		DestroyLocalFileInfo(local);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 
@@ -6210,6 +6317,7 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 	if (!path) {
 		assert(path);
 		DestroyLocalFileInfo(local);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 
@@ -6233,12 +6341,14 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 		fprintf(stderr, "Error: The remote file exist, and it is directory. %s\n", path);
 		pcs_fileinfo_destroy(meta);
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	else if (meta && !is_force){
 		fprintf(stderr, "Error: The remote file exist. You can specify '-f' to force override. %s\n", path);
 		pcs_fileinfo_destroy(meta);
 		pcs_free(path);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
 	else if (meta && is_force) {
@@ -6270,12 +6380,14 @@ static int cmd_upload(ShellContext *context, struct args *arg)
 		if (errmsg) pcs_free(errmsg);
 		pcs_free(path);
 		if (meta) pcs_fileinfo_destroy(meta);
+		if (!u8_is_utf8_sys()) pcs_free(locPath);
 		return -1;
 	}
-	printf("Upload %s to %s Success.\n", locPath, path);
+	printf("Upload %s to %s Success.\n", arg->argv[0], path);
 	if (errmsg) pcs_free(errmsg);
 	pcs_free(path);
 	if (meta) pcs_fileinfo_destroy(meta);
+	if (!u8_is_utf8_sys()) pcs_free(locPath);
 	return 0;
 }
 
@@ -6434,7 +6546,7 @@ int main(int argc, char *argv[])
 	char *errmsg = NULL, *val = NULL;
 	setlocale(LC_ALL, "chs");
 	app_name = filename(argv[0]);
-	if (parse_arg(&arg, argc, argv)) {
+	if (parse_arg(&arg, argc, argv, u8_is_utf8_sys() ? NULL : mbs2utf8)) {
 		usage();
 		free_args(&arg);
 		return -1;
@@ -6467,6 +6579,6 @@ int main(int argc, char *argv[])
 exit_main:
 	free_context(&context);
 	free_args(&arg);
-	pcs_mem_print_leak();
+	pcs_print_leak();
 	return rc;
 }
