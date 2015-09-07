@@ -8,8 +8,7 @@
 #include "pcs_mem.h"
 #include "pcs_utils.h"
 #include "pcs_http.h"
-
-#define USAGE "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36"
+#include "../const.h"
 
 #define PCS_SKIP_SPACE(p) while((*p) && (*p == ' ' || *p == '\f' || *p == '\n' || *p == '\r' || *p == '\t' || *p == '\v')) p++
 
