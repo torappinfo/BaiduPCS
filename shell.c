@@ -288,7 +288,7 @@ struct UploadThreadState {
 	struct UploadThreadState *next;
 };
 
-static char *app_name = NULL;
+static const char *app_name = NULL;
 
 /*
 * 检查是否登录
@@ -3430,6 +3430,7 @@ static inline int do_download(ShellContext *context,
 	struct DownloadState ds = { 0 };
 	char *local_path, *remote_path, *dir,
 		*tmp_local_path;
+	const char *local_filename;
 	int secure_method = 0;
 	int64_t fsize = 0;
 
@@ -3439,7 +3440,18 @@ static inline int do_download(ShellContext *context,
 	ds.pErrMsg = pErrMsg;
 	ds.status = 0;
 
-	local_path = combin_path(local_basedir, -1, local_file);
+	local_filename = filename(local_file);
+	if (strlen(local_filename) == 0) {
+		char *new_local_file;
+		dir = base_dir(local_file, -1);
+		new_local_file = combin_path(dir, -1, filename(remote_file));
+		local_path = combin_path(local_basedir, -1, new_local_file);
+		pcs_free(new_local_file);
+		pcs_free(dir);
+	}
+	else {
+		local_path = combin_path(local_basedir, -1, local_file);
+	}
 
 	/*创建目录*/
 	dir = base_dir(local_path, -1);
@@ -3498,6 +3510,19 @@ static inline int do_download(ShellContext *context,
 
 	fsize = pcs_get_download_filesize(context->pcs, remote_path);
 	ds.file_size = fsize;
+    if (fsize < 1) {
+		if (pErrMsg) {
+			if (*pErrMsg) pcs_free(*pErrMsg);
+			(*pErrMsg) = pcs_utils_sprintf("Can't get the file size.\n");
+		}
+		if (op_st) (*op_st) = OP_ST_FAIL;
+		DeleteFileRecursive(tmp_local_path);
+		pcs_free(tmp_local_path);
+		pcs_free(local_path);
+        pcs_free(remote_path);
+		uninit_download_state(&ds);
+		return -1;
+	}
 
 	if (fsize <= MIN_SLICE_SIZE) {
 		/*启动下载*/
@@ -5155,12 +5180,14 @@ static int cmd_echo(ShellContext *context, struct args *arg)
 		//获取文件的内容
 		org = pcs_cat(context->pcs, path, &len);
 		if (org == NULL) {
-			fprintf(stderr, "Error: %s path=%s.\n", pcs_strerror(context->pcs), path);
-			pcs_free(path);
-			return -1;
+			//fprintf(stderr, "Error: %s path=%s.\n", pcs_strerror(context->pcs), path);
+			//pcs_free(path);
+			//return -1;
+			org = "";
+			len = 0;
 		}
 		buf = (char *)org;
-		if (context->secure_enable) {
+		if (len > 0 && context->secure_enable) {
 			int context_secure_method = get_secure_method(context);
 			if (context_secure_method == PCS_SECURE_AES_CBC_128
 				|| context_secure_method == PCS_SECURE_AES_CBC_192
@@ -5182,7 +5209,8 @@ static int cmd_echo(ShellContext *context, struct args *arg)
 		//拼接两个字符串
 		t = (char *)pcs_malloc(sz + len + 1);
 		assert(t);
-		memcpy(t, buf, len);
+		if (len > 0)
+			memcpy(t, buf, len);
 		memcpy(t + len, text, sz + 1);
 		sz += len;
 		if (need_free) pcs_free(buf);
@@ -6023,6 +6051,7 @@ static int cmd_search(ShellContext *context, struct args *arg)
 	const char *relPath = NULL, *keyword = NULL;
 
 	PcsFileInfoList *list = NULL;
+	int fscount = 0;
 
 	if (test_arg(arg, 1, 2, "r", "h", "help", NULL)) {
 		usage_search();
@@ -6065,12 +6094,13 @@ static int cmd_search(ShellContext *context, struct args *arg)
 		}
 		print_filelist_head(4);
 		pcs_free(path);
-		return 0;
+		return 1;
 	}
+	fscount = list->count;
 	print_filelist(list, NULL, NULL, NULL);
 	pcs_filist_destroy(list);
 	pcs_free(path);
-	return 0;
+	return fscount > 0 ? 0 : 1;
 }
 
 #pragma region synch
