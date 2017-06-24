@@ -1,4 +1,4 @@
-﻿#include <inttypes.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -13,6 +13,10 @@
 # include <Windows.h>
 # include "pcs/openssl_aes.h"
 # include "pcs/openssl_md5.h"
+
+# define snprintf _snprintf
+# define vsnprintf _vsnprintf
+
 #else
 # include <unistd.h>
 # include <termios.h>
@@ -31,15 +35,18 @@
 #include "utils.h"
 #include "arg.h"
 #ifdef WIN32
-# include "utf8.h"
+# include "pcs/utf8.h"
+#ifndef __MINGW32__
 # define lseek _lseek
 # define fileno _fileno
 # define fseeko _fseeki64
 # define ftello _ftelli64
 #endif
+#endif
 #include "shell.h"
 #include "const.h"
 
+#define USAGE "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36"
 #define TIMEOUT						60
 #define CONNECTTIMEOUT				10
 #define MAX_THREAD_NUM				100
@@ -1114,7 +1121,7 @@ static void unlock_for_upload(struct UploadState *us)
 
 #pragma endregion
 
-#pragma region 三个回调： 输入验证码、显示上传进度、写下载文件
+#pragma region 三个回调： 输入验证码, 显示上传进度, 写下载文件
 
 static int save_thread_states_to_file(FILE *pf, int64_t offset, struct DownloadThreadState *state_link)
 {
@@ -1199,8 +1206,30 @@ static PcsBool verifycode(unsigned char *ptr, size_t size, char *captcha, size_t
 	fclose(pf);
 
 	printf("The captcha image at %s.\nPlease input the captcha code: ", savedfile);
+#ifdef WIN32
+	{
+		char fmt[32];
+		memset(captcha, 0, captchaSize);
+		snprintf(fmt, sizeof(fmt), "%%%ds", captchaSize - 1);
+		scanf(fmt, captcha);
+	}
+	if (!u8_is_utf8_sys()) {
+		char *u8s = mbs2utf8(captcha);
+		strncpy(captcha, u8s, captchaSize);
+		pcs_free(u8s);
+	}
+#else
 	std_string(captcha, captchaSize);
+#endif
 	return PcsTrue;
+}
+
+
+static PcsBool input_str(const char *tips, char *value, size_t valueSize, void *state)
+{
+    printf("%s", tips);
+    std_string(value, valueSize);
+    return PcsTrue;
 }
 
 /*显示上传进度*/
@@ -1552,7 +1581,7 @@ static void print_uint64(const char *format, int64_t size)
 }
 
 /*打印文件列表的头*/
-static void print_filelist_head(int size_width)
+static void print_filelist_head(int size_width, int md5, int thumb)
 {
 	int i;
 	putchar('D');
@@ -1561,16 +1590,26 @@ static void print_filelist_head(int size_width)
 		putchar(' ');
 	printf("Size");
 	putchar(' ');
+	putchar(' ');
 	printf("Modify Date Time");
+	if (md5) {
+		putchar(' ');
+		putchar(' ');
+		printf("MD5");
+	}
 	putchar(' ');
 	putchar(' ');
-	putchar(' ');
-	putchar(' ');
-	printf("File Name\n");
+	printf("File Name");
+    if (thumb) {
+        putchar(' ');
+        putchar(' ');
+        printf("Thumb Url");
+    }
+    putchar('\n');
 }
 
 /*打印文件列表的数据行*/
-static void print_filelist_row(PcsFileInfo *f, int size_width)
+static void print_filelist_row(PcsFileInfo *f, int size_width, int md5, int thumb)
 {
 	const char *p;
 
@@ -1585,13 +1624,25 @@ static void print_filelist_row(PcsFileInfo *f, int size_width)
 		putchar(*p++);
 	}
 	putchar(' ');
-	print_time("%s", f->server_mtime);
 	putchar(' ');
-	printf("%s\n", f->path);
+	print_time("%s", f->server_mtime);
+	if (md5) {
+		putchar(' ');
+		putchar(' ');
+		printf("%s", f->md5);
+	}
+	putchar(' ');
+	putchar(' ');
+	printf("%s", f->path);
+    if (thumb && f->thumbs) {
+        printf("  %s", f->thumbs->string2);
+    }
+    putchar('\n');
 }
 
 /*打印文件列表*/
-static void print_filelist(PcsFileInfoList *list, int *pFileCount, int *pDirCount, int64_t *pTotalSize)
+static void print_filelist(PcsFileInfoList *list, int *pFileCount, int *pDirCount, int64_t *pTotalSize,
+	int md5, int thumb)
 {
 	char tmp[64] = { 0 };
 	int cnt_file = 0,
@@ -1618,11 +1669,12 @@ static void print_filelist(PcsFileInfoList *list, int *pFileCount, int *pDirCoun
 
 	if (size_width < 4)
 		size_width = 4;
-	//print_filelist_head(size_width);
+	print_filelist_head(size_width, md5, thumb);
+	puts("------------------------------------------------------------------------------");
 	pcs_filist_iterater_init(list, &iterater, PcsFalse);
 	while (pcs_filist_iterater_next(&iterater)) {
 		file = iterater.current;
-		print_filelist_row(file, size_width);
+		print_filelist_row(file, size_width, md5, thumb);
 	}
 	
 	pcs_utils_readable_size((double)total, tmp, 63, NULL);
@@ -1653,6 +1705,14 @@ static void print_fileinfo(PcsFileInfo *f, const char *prex)
 		printf("%smd5:\t\t%s\n", prex, f->md5);
 		printf("%sdlink:\t\t%s\n", prex, f->dlink);
 	}
+    if (f->thumbs) {
+        PcsSList2 *list = f->thumbs;
+        printf("%sthumbs:\n", prex);
+        while (list) {
+            printf("%s  %s: %s\n", prex, list->string1, list->string2);
+            list = list->next;
+        }
+    }
 }
 
 #pragma endregion
@@ -1732,6 +1792,10 @@ static char *context2str(ShellContext *context)
 	item = cJSON_CreateNumber(context->max_upload_speed_per_thread);
 	assert(item);
 	cJSON_AddItemToObject(root, "max_upload_speed_per_thread", item);
+
+	item = cJSON_CreateString(context->user_agent);
+	assert(item);
+	cJSON_AddItemToObject(root, "user_agent", item);
 
 	json = cJSON_Print(root);
 	assert(json);
@@ -1925,6 +1989,12 @@ static int restore_context(ShellContext *context, const char *filename)
 		}
 	}
 
+	item = cJSON_GetObjectItem(root, "user_agent");
+	if (item && item->valuestring && item->valuestring[0]) {
+		if (context->user_agent) pcs_free(context->user_agent);
+		context->user_agent = pcs_utils_strdup(item->valuestring);
+	}
+
 	cJSON_Delete(root);
 	pcs_free(filecontent);
 	return 0;
@@ -1950,6 +2020,8 @@ static void init_context(ShellContext *context, struct args *arg)
 	context->max_thread = 1;
 	context->max_speed_per_thread = 0;
 	context->max_upload_speed_per_thread = 0;
+
+	context->user_agent = pcs_utils_strdup(USAGE);
 }
 
 /*释放上下文*/
@@ -1963,6 +2035,7 @@ static void free_context(ShellContext *context)
 	if (context->secure_method) pcs_free(context->secure_method);
 	if (context->secure_key) pcs_free(context->secure_key);
 	if (context->contextfile) pcs_free(context->contextfile);
+	if (context->user_agent) pcs_free(context->user_agent);
 	memset(context, 0, sizeof(ShellContext));
 }
 
@@ -1973,10 +2046,12 @@ static Pcs *create_pcs(ShellContext *context)
 	if (!pcs) return NULL;
 	pcs_setopt(pcs, PCS_OPTION_CAPTCHA_FUNCTION, (void *)&verifycode);
 	pcs_setopt(pcs, PCS_OPTION_CAPTCHA_FUNCTION_DATA, (void *)context);
+    pcs_setopt(pcs, PCS_OPTION_INPUT_FUNCTION, (void *)&input_str);
+    pcs_setopt(pcs, PCS_OPTION_INPUT_FUNCTION_DATA, (void *)context);
 	pcs_setopts(pcs,
 		PCS_OPTION_PROGRESS_FUNCTION, (void *)&upload_progress,
 		PCS_OPTION_PROGRESS, (void *)((long)PcsFalse),
-		PCS_OPTION_USAGE, (void *)USAGE,
+		PCS_OPTION_USAGE, (void*)context->user_agent,
 		//PCS_OPTION_TIMEOUT, (void *)((long)TIMEOUT),
 		PCS_OPTION_CONNECTTIMEOUT, (void *)((long)CONNECTTIMEOUT),
 		PCS_OPTION_END);
@@ -2158,7 +2233,9 @@ static void usage_list()
 	printf("\nDescription:\n");
 	printf("  List the directory\n");
 	printf("\nOptions:\n");
-	printf("  -h    Print the usage.\n");
+	printf("  -md5   Print md5 if possiable.\n");
+	printf("  -thumb Print thumb url if possiable.\n");
+	printf("  -h     Print the usage.\n");
 	printf("\nSamples:\n");
 	printf("  %s list -h\n", app_name);
 	printf("  %s list\n", app_name);
@@ -2335,11 +2412,11 @@ static void usage_set()
 	printf("  secure_enable        Boolean    true|false\n");
 	printf("  secure_key           String     not null when 'secure_method' is not 'plaintext'\n");
 	printf("  secure_method        Enum       plaintext|aes-cbc-128|aes-cbc-192|aes-cbc-256\n");
-	printf("  secure_method        Enum       plaintext|aes-cbc-128|aes-cbc-192|aes-cbc-256\n");
 	printf("  timeout_retry        Boolean    true|false. \n");
 	printf("  max_thread           UInt       > 0 and < %d. The max number of thread that allow create.\n", MAX_THREAD_NUM);
 	printf("  max_speed_per_thread Int        >= 0. The max speed in KiB per thread.\n");
 	printf("  max_upload_speed_per_thread Int >= 0. The max speed in KiB per thread.\n");
+	printf("  user_agent           String     set user agent.\n");
 	printf("\nSamples:\n");
 	printf("  %s set -h\n", app_name);
 	printf("  %s set --cookie_file=\"/tmp/pcs.cookie\"\n", app_name);
@@ -2355,8 +2432,10 @@ static void usage_search()
 	printf("\nDescription:\n");
 	printf("  Search the files in the specify directory\n");
 	printf("\nOptions:\n");
-	printf("  -h    Print the usage.\n");
-	printf("  -r    Recursive search the sub directories.\n");
+	printf("  -md5   Print md5 if possiable.\n");
+	printf("  -thumb Print thumb url if possiable.\n");
+	printf("  -h     Print the usage.\n");
+	printf("  -r     Recursive search the sub directories.\n");
 	printf("\nSamples:\n");
 	printf("  %s search -h\n", app_name);
 	printf("  %s search dst.txt\n", app_name);
@@ -2490,9 +2569,11 @@ static void usage()
 	printf("  upload   Upload the file\n");
 	printf("  version  Print the version\n");
 	printf("  who      Print the current user\n");
-	printf("Use '%s <command> -h' to print the details of the command. \n", app_name);
+	printf("Use '%s <command> -h' to print command usage. \n", app_name);
 	printf("Sample: \n");
 	printf("  %s help\n", app_name);
+	printf("  %s help cat\n", app_name);
+	printf("  %s cat -h\n", app_name);
 	printf("  %s cat /note.txt\n", app_name);
 	printf("  %s cd /temp\n", app_name);
 	printf("  %s cat /note.txt --context=/home/gang/.pcs_context\n", app_name);
@@ -2674,6 +2755,16 @@ static int set_max_upload_speed_per_thread(ShellContext *context, const char *va
 	v = atoi(val);
 	if (v < 0) return -1;
 	context->max_upload_speed_per_thread = v;
+	return 0;
+}
+
+/*设置上下文中的 user_agent 值*/
+static int set_user_agent(ShellContext *context, const char *val)
+{
+	if (!val || !val[0]) return -1;
+	if (streq(context->user_agent, val, -1)) return 0;
+	if (context->user_agent) pcs_free(context->user_agent);
+	context->user_agent = pcs_utils_strdup(val);
 	return 0;
 }
 
@@ -4789,8 +4880,7 @@ static int combin_with_remote_dir_files(ShellContext *context, rb_red_blk_tree *
 				if (info->isdir) {
 					if (check_local_dir_exist) {
 						rbn = RBExactQuery(rb, (void *)(info->path + skip));
-						meta = (MyMeta *)rbn->info;
-						if (meta->flag & FLAG_ON_LOCAL) {
+						if (rbn && ((meta = (MyMeta *)rbn->info)->flag & FLAG_ON_LOCAL)) {
 							if (combin_with_remote_dir_files(context, rb, info->path, recursive, skip, total_cnt, check_local_dir_exist)) {
 								pcs_filist_destroy(list); 
 								return -1;
@@ -5552,8 +5642,9 @@ static int cmd_list(ShellContext *context, struct args *arg)
 	char tmp[64] = { 0 };
 	int fileCount = 0, dirCount = 0;
 	int64_t totalSize = 0;
+    int md5 = 0, thumb = 0;
 
-	if (test_arg(arg, 0, 1, "h", "help", NULL)) {
+	if (test_arg(arg, 0, 1, "md5", "thumb", "h", "help", NULL)) {
 		usage_list();
 		return -1;
 	}
@@ -5575,6 +5666,9 @@ static int cmd_list(ShellContext *context, struct args *arg)
 		return -1;
 	}
 
+	md5 = has_opt(arg, "md5");
+	thumb = has_opt(arg, "thumb");
+
 	while (1) {
 		list = pcs_list(context->pcs, path,
 			page_index, context->list_page_size,
@@ -5588,8 +5682,8 @@ static int cmd_list(ShellContext *context, struct args *arg)
 			}
 			break;
 		}
-	       
-		print_filelist(list, &fileCount, &dirCount, &totalSize);
+		printf("PAGE#%d\n", page_index);
+		print_filelist(list, &fileCount, &dirCount, &totalSize, md5, thumb);
 		if (list->count < context->list_page_size) {
 			pcs_filist_destroy(list);
 			break;
@@ -5888,13 +5982,15 @@ static int cmd_remove(ShellContext *context, struct args *arg)
 	}
 
 	res = pcs_delete(context->pcs, &slist);
-	if (!res) {
+	if (!res || res->error != 0) {
 		fprintf(stderr, "Error: %s path=%s.\n", pcs_strerror(context->pcs), slist.string);
+		if (res)
+			pcs_pan_api_res_destroy(res);
 		pcs_free(slist.string);
 		return -1;
 	}
 	info = res->info_list;
-	if (info->info.error) {
+	if (info && info->info.error) {
 		fprintf(stderr, "Error: unknow path=%s. \n", slist.string);
 		pcs_pan_api_res_destroy(res);
 		pcs_free(slist.string);
@@ -5972,6 +6068,7 @@ static int cmd_set(ShellContext *context, struct args *arg)
 		"cookie_file", "captcha_file", 
 		"list_page_size", "list_sort_name", "list_sort_direction",
 		"secure_method", "secure_key", "secure_enable", "timeout_retry", "max_thread", "max_speed_per_thread",
+		"user-agent",
 		"h", "help", NULL) && arg->optc == 0) {
 		usage_set();
 		return -1;
@@ -6077,6 +6174,14 @@ static int cmd_set(ShellContext *context, struct args *arg)
 		}
 	}
 
+	if (has_optEx(arg, "user_agent", &val)) {
+		count++;
+		if (set_user_agent(context, val)) {
+			usage_set();
+			return -1;
+		}
+	}
+
 	if (!count) {
 		usage_set();
 		return -1;
@@ -6093,11 +6198,12 @@ static int cmd_search(ShellContext *context, struct args *arg)
 	int is_recursive = 0;
 	char *path = NULL;
 	const char *relPath = NULL, *keyword = NULL;
+    int md5 = 0, thumb = 0;
 
 	PcsFileInfoList *list = NULL;
 	int fscount = 0;
 
-	if (test_arg(arg, 1, 2, "r", "h", "help", NULL)) {
+	if (test_arg(arg, 1, 2, "md5", "thumb", "r", "h", "help", NULL)) {
 		usage_search();
 		return -1;
 	}
@@ -6107,6 +6213,8 @@ static int cmd_search(ShellContext *context, struct args *arg)
 	}
 
 	is_recursive = has_opt(arg, "r");
+	md5 = has_opt(arg, "md5");
+	thumb = has_opt(arg, "thumb");
 
 	if (arg->argc == 1) {
 		keyword = arg->argv[0];
@@ -6136,12 +6244,12 @@ static int cmd_search(ShellContext *context, struct args *arg)
 			pcs_free(path);
 			return -1;
 		}
-		print_filelist_head(4);
+		print_filelist_head(4, md5, thumb);
 		pcs_free(path);
 		return 1;
 	}
 	fscount = list->count;
-	print_filelist(list, NULL, NULL, NULL);
+	print_filelist(list, NULL, NULL, NULL, md5, thumb);
 	pcs_filist_destroy(list);
 	pcs_free(path);
 	return fscount > 0 ? 0 : 1;
@@ -6618,7 +6726,7 @@ int main(int argc, char *argv[])
 	ShellContext context = { 0 };
 	int rc = 0;
 	char *errmsg = NULL, *val = NULL;
-	setlocale(LC_ALL, "chs");
+	setlocale(LC_ALL, "");
 	app_name = filename(argv[0]);
 	if (parse_arg(&arg, argc, argv, u8_is_utf8_sys() ? NULL : mbs2utf8)) {
 		usage();

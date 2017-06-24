@@ -1,4 +1,4 @@
-﻿#ifndef _PCS_HTTP_H
+#ifndef _PCS_HTTP_H
 #define _PCS_HTTP_H
 
 #include <stdarg.h>
@@ -252,5 +252,16 @@ PCS_API const char *pcs_http_rawdata(PcsHttp handle, int *size, const char **enc
 
 /*返回下载速度。通过curl_easy_getinfo(http->curl, CURLINFO_SPEED_DOWNLOAD, &downloadSpeed)来获取。*/
 PCS_API double pcs_http_speed_download(PcsHttp handle);
+
+/*
+ * 解码s字符串，结果保存在s字符串中。
+ * 返回 s 字符串指针。
+ */
+PCS_API char *pcs_http_url_decode(PcsHttp handle, char *s);
+
+/* 当 pcs_http_get() 设置为不跟随跳转时，可通过此方法获取目标地址。
+ * 返回 30x 的目标地址。
+ */
+PCS_API const char *pcs_http_redir_url(PcsHttp handle);
 
 #endif

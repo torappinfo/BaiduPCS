@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -11,6 +11,10 @@
 # include <WinSock2.h>
 # include <Windows.h>
 # include <Shlwapi.h>
+
+# define snprintf _snprintf
+# define vsnprintf _vsnprintf
+
 #else
 #  include <inttypes.h>
 #  include <termios.h>
@@ -18,12 +22,6 @@
 
 #include "pcs/pcs_mem.h"
 #include "utils.h"
-
-
-#if defined(WIN32)
-# define snprintf _snprintf
-# define vsnprintf _vsnprintf
-#endif
 
 
 static inline char *i_strdup(const char *str, int len)

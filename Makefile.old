@@ -4,8 +4,28 @@ ver = release
 OS_NAME = $(shell uname -s | cut -c1-6)
 LC_OS_NAME = $(shell echo $(OS_NAME) | tr '[A-Z]' '[a-z]')
 
-PCS_OBJS     = bin/cJSON.o bin/pcs.o bin/pcs_fileinfo.o bin/pcs_http.o bin/pcs_mem.o bin/pcs_pan_api_resinfo.o bin/pcs_slist.o bin/pcs_utils.o
-SHELL_OBJS   = bin/shell_arg.o bin/shell.o bin/dir.o bin/rb_tree_misc.o bin/rb_tree_stack.o bin/red_black_tree.o bin/shell_utils.o bin/hashtable.o
+PCS_OBJS     =  bin/cJSON.o \
+				bin/pcs.o \
+				bin/pcs_fileinfo.o \
+				bin/pcs_http.o \
+				bin/pcs_mem.o \
+				bin/pcs_pan_api_resinfo.o \
+				bin/pcs_slist.o \
+				bin/pcs_utils.o \
+				bin/err_msg.o \
+				bin/utf8.o \
+				bin/pcs_buffer.o \
+				bin/pcs_passport_dv.o
+
+SHELL_OBJS   =  bin/shell_arg.o \
+				bin/shell.o \
+				bin/dir.o \
+				bin/rb_tree_misc.o \
+				bin/rb_tree_stack.o \
+				bin/red_black_tree.o \
+				bin/shell_utils.o \
+				bin/hashtable.o
+
 #CCFLAGS      = -DHAVE_ASPRINTF -DHAVE_ICONV
 ifeq ($(LC_OS_NAME), cygwin)
 CYGWIN_CCFLAGS = -largp
@@ -13,8 +33,14 @@ else
 CYGWIN_CCFLAGS = 
 endif
 
+ifeq ($(LC_OS_NAME), $(filter $(LC_OS_NAME),mingw3 mingw6))
+MINGW_CCFLAGS = -lshlwapi
+else
+MINGW_CCFLAGS = 
+endif
+
 ifeq ($(LC_OS_NAME), darwin)
-APPLE_CCFLAGS = -I/usr/local/opt/openssl/include
+APPLE_CCFLAGS = -I/usr/local/opt/openssl/include -L/usr/local/opt/openssl/lib
 else
 APPLE_CCFLAGS = 
 endif
@@ -26,12 +52,12 @@ else
 CCFLAGS:=-g -D_FILE_OFFSET_BITS=64 -DDEBUG -D_DEBUG
 endif
 
-PCS_CCFLAGS = -fPIC $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS)
+PCS_CCFLAGS = -fPIC $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS) $(MINGW_CCFLAGS)
 
-all: bin/libpcs.a bin/pcs
+all: bin/pcs
 
-bin/pcs : pre bin/libpcs.a $(SHELL_OBJS)
-	$(CC) -o $@ $(SHELL_OBJS) $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS) -L./bin -lpcs -lm -lcurl -lssl -lcrypto -lpthread
+bin/pcs : pre $(PCS_OBJS) $(SHELL_OBJS)
+	$(CC) -o $@ $(PCS_OBJS) $(SHELL_OBJS) $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS) $(MINGW_CCFLAGS) -lm -lcurl -lssl -lcrypto -lpthread
 
 bin/shell_arg.o: arg.c arg.h
 	$(CC) -o $@ -c $(PCS_CCFLAGS) arg.c
@@ -50,9 +76,6 @@ bin/rb_tree_stack.o: rb_tree/stack.c rb_tree/stack.h
 bin/red_black_tree.o: rb_tree/red_black_tree.c rb_tree/red_black_tree.h
 	$(CC) -o $@ -c $(PCS_CCFLAGS) rb_tree/red_black_tree.c
 
-bin/libpcs.a : pre $(PCS_OBJS)
-	$(AR) crv $@ $(PCS_OBJS)
-
 bin/cJSON.o: pcs/cJSON.c pcs/cJSON.h
 	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/cJSON.c
 bin/pcs.o: pcs/pcs.c pcs/pcs_defs.h pcs/pcs_mem.h pcs/pcs_utils.h pcs/pcs_slist.h pcs/pcs_http.h pcs/cJSON.h pcs/pcs.h pcs/pcs_fileinfo.h pcs/pcs_pan_api_resinfo.h
@@ -69,12 +92,20 @@ bin/pcs_slist.o: pcs/pcs_slist.c pcs/pcs_mem.h pcs/pcs_defs.h pcs/pcs_slist.h
 	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/pcs_slist.c
 bin/pcs_utils.o: pcs/pcs_utils.c pcs/pcs_mem.h pcs/pcs_defs.h pcs/pcs_utils.h pcs/pcs_slist.h
 	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/pcs_utils.c
+bin/err_msg.o: pcs/err_msg.c
+	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/err_msg.c
+bin/utf8.o: pcs/utf8.c
+	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/utf8.c
+bin/pcs_buffer.o: pcs/pcs_buffer.c
+	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/pcs_buffer.c
+bin/pcs_passport_dv.o: pcs/pcs_passport_dv.c
+	$(CC) -o $@ -c $(PCS_CCFLAGS) pcs/pcs_passport_dv.c
 
 bin/libpcs.so: pre $(PCS_OBJS)
-	$(CC) -shared -fPIC -o $@ $(PCS_OBJS) -lcurl -lssl -lcrypto
+	$(CC) -shared -fPIC -o $@ $(PCS_OBJS) $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS) $(MINGW_CCFLAGS) -lm -lcurl -lssl -lcrypto -lpthread
 
-pcs4-dev : pre bin/libpcs.so $(SHELL_OBJS)
-	$(CC) -o bin/pcs $(SHELL_OBJS) $(CCFLAGS) $(CYGWIN_CCFLAGS) $(APPLE_CCFLAGS) -L./bin -lpcs -lm -lcurl -lssl -lcrypto -lpthread
+bin/libpcs.a : pre $(PCS_OBJS)
+	$(AR) crv $@ $(PCS_OBJS)
 
 .PHONY : install
 install:
@@ -84,25 +115,9 @@ install:
 uninstall:
 	rm /usr/local/bin/pcs
 
-.PHONY : install4-dev
-install4-dev:
-	mkdir /usr/local/include/pcs
-	cp ./pcs/*.h /usr/local/include/pcs/
-	cp ./bin/libpcs.so /usr/local/lib/
-	cp ./bin/pcs /usr/local/bin
-	ldconfig
-
-.PHONY : uninstall4-dev
-uninstall4-dev:
-	rm /usr/local/bin/pcs
-	rm /usr/local/lib/libpcs.so
-	rm /usr/local/include/pcs/*.h
-	rm -r /usr/local/include/pcs
-	ldconfig
-
 .PHONY : clean
 clean :
-	-rm -f ./bin/*.o ./bin/*.so ./bin/libpcs.a ./bin/pcs
+	-rm -f ./bin/*.o ./bin/*.so ./bin/pcs
 
 .PHONY : pre
 pre :
