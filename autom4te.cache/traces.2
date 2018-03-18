@@ -342,7 +342,7 @@ AC_CACHE_CHECK([whether deplibs are loaded by dlopen],
     # at 6.2 and later dlopen does load deplibs.
     lt_cv_sys_dlopen_deplibs=yes
     ;;
-  netbsd* | netbsdelf*-gnu)
+  netbsd*)
     lt_cv_sys_dlopen_deplibs=yes
     ;;
   openbsd*)
@@ -3003,7 +3003,6 @@ m4trace:configure.ac:5: -1- m4_pattern_allow([^datadir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^sysconfdir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^sharedstatedir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^localstatedir$])
-m4trace:configure.ac:5: -1- m4_pattern_allow([^runstatedir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^includedir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^oldincludedir$])
 m4trace:configure.ac:5: -1- m4_pattern_allow([^docdir$])
