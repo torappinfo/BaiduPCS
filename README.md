@@ -24,6 +24,20 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     cd ..
     sudo apt install ./baidupcs_*.deb
 
+编译 (Debian) (新方法)：
+===================================
+程序依赖于 libcurl。
+
+### 1. 安装依赖
+    apt-get install build-essential libcurl4-openssl-dev libssl-dev
+### 2. 获取源代码
+    git clone https://github.com/GangZhuo/BaiduPCS.git
+### 3. 编译源代码
+    cd BaiduPCS
+    ./configure && make
+    make install #将安装到/usr/local/bin下
+### 4. 手动安装到其他目录，例如 /usr/bin 下 
+    cp ./baidupcs /usr/bin/
 
 编译 (Debian)：
 ===================================
@@ -35,11 +49,11 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
     git clone https://github.com/GangZhuo/BaiduPCS.git
 ### 3. 编译源代码
     cd BaiduPCS
-    make clean
-    make
-    make install #将安装到/usr/local/bin下
+    make clean -f Makefile.old
+    make -f Makefile.old
+    make install -f Makefile.old #将安装到/usr/local/bin下
 ### 4. 手动安装到其他目录，例如 /usr/bin 下 
-    cp ./baidupcs /usr/bin/
+    cp ./bin/pcs /usr/bin/
 
 编译 (Windows)：
 ===================================
@@ -81,6 +95,10 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
 	brew install openssl
 ### 3. 编译源代码
     cd BaiduPCS
+    export LDFLAGS=-L/usr/local/opt/openssl/lib
+    export CPPFLAGS=-I/usr/local/opt/openssl/include
+    autoreconf
+    ./configure LD=/usr/bin/ld OPENSSL_LIBS='-lssl -lcrypto -lz'
     make clean
     make
     make install #将安装到/usr/local/bin下
@@ -207,6 +225,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
 	                                                                单位为KiB。例，如果设置为100，共有5线程，
 	                                                                则总的最大上传速度将在500KiB/s上下浮动。*/
 	    "user_agent": "netdisk;5.2.7;PC;PC-Windows;6.2.9200;WindowsBaiduYunGuanJia", /*指定 User-Agent。*/
+		"cache_size": 1024	                                      /* 设置磁盘缓存大小 */
     }
     
 
@@ -244,6 +263,23 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
       baidupcs encode -e data.txt data-sec.txt
 	  baidupcs encode -d data-sec.txt data-plain.txt
 	  baidupcs encode -h
+
+### 修复文件（实验性功能）
+    baidupcs fix [-fh] <md5> <length> <scrap> <remote path>
+	  
+	  <md5>          指定文件的 MD5 值
+	  <length>       指定文件的字节大小
+	  <scrap>        下载的前 256KiB 的文件碎片
+	  <remote path>  修复成功后保存的网盘路径
+    
+    修复文件。从国外网站下载文件时，如果速度比较慢，而你又知道文件的 MD5 值和文件大小，
+	那么你可以只下载前 256KiB 的内容，然后使用此命令来尝试修复文件。修复成功后，文件将
+	保存在 <remote path> 指定的网盘目录中，因此你将可以从百度网盘以较快的速度下载。
+	如果这个文件已经存在于百度网盘中的话（无论是否在自己的网盘中），修复的成功率应该是 100%。
+    
+    示例：
+       baidupcs fix -h
+       baidupcs fix 39d768542cd2420771f28b9a3652412f 5849513984 ~/xxx.iso xxx.iso
 
 ### 查看帮助
     baidupcs help [command name]
@@ -361,6 +397,7 @@ C/C++写的一个百度网盘工具，可以在linux终端中使用。
 	--max_speed_per_thread=<num>       设置单线程的最大下载速度。单位为KiB。详细查看'pcs context'命令中对上下文文件的说明
 	--max_upload_speed_per_thread=<num>设置单线程的最大上传速度。单位为KiB。详细查看'pcs context'命令中对上下文文件的说明
 	--user_agent=<user-agent>          设置 User-Agent。
+	--cache_size=<num>                 设置下载时磁盘缓存的大小。单位为 KiB。CTRL + C 中断下载时，磁盘缓存中的内容将丢失，需要再次下载。
 
     示例：
       baidupcs set -h
